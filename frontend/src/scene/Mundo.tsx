@@ -36,6 +36,8 @@ const SUELO_NOCHE = new THREE.Color("#1b2848");
 const COLOR_SOL_DIA = new THREE.Color("#fff1d1");
 const COLOR_SOL_TARDE = new THREE.Color("#ff9b68");
 const ABERRACION_LENTE = new THREE.Vector2(0.00006, 0.00006);
+const INTENSIDAD_AMBIENTE_DIA = 0.62;
+const INTENSIDAD_AMBIENTE_NOCHE = 0.2;
 
 export function Mundo() {
   const { camera, scene } = useThree();
@@ -43,6 +45,7 @@ export function Mundo() {
   const sol = useRef<Mesh>(null);
   const luna = useRef<Mesh>(null);
   const estrellas = useRef<THREE.Points>(null);
+  const destinoCamara = useRef(new THREE.Vector3());
   const fondo = useRef<THREE.Color>(null);
   const niebla = useRef<THREE.Fog>(null);
   const hemisferica = useRef<THREE.HemisphereLight>(null);
@@ -54,7 +57,7 @@ export function Mundo() {
     avanzar(ahora);
     avanzarAmbiente(delta);
     const fase = momento();
-    scene.environmentIntensity = THREE.MathUtils.lerp(0.42, 0.14, fase.noche);
+    scene.environmentIntensity = THREE.MathUtils.lerp(INTENSIDAD_AMBIENTE_DIA, INTENSIDAD_AMBIENTE_NOCHE, fase.noche);
     const t = fase.hora;
     const elevacion = elevacionSolar(t);
     const dx = Math.cos((t - 0.25) * Math.PI * 2);
@@ -70,7 +73,7 @@ export function Mundo() {
     if (hemisferica.current) {
       hemisferica.current.color.copy(DIA_LUZ).lerp(TARDE_LUZ, fase.calor).lerp(NOCHE_LUZ, fase.noche);
       hemisferica.current.groundColor.copy(SUELO_DIA).lerp(SUELO_NOCHE, fase.noche);
-      hemisferica.current.intensity = THREE.MathUtils.lerp(0.78, 0.38, fase.noche) + fase.calor * 0.08;
+      hemisferica.current.intensity = THREE.MathUtils.lerp(0.86, 0.46, fase.noche) + fase.calor * 0.08;
     }
     if (luzSolar.current) {
       luzSolar.current.position.copy(solPos);
@@ -106,9 +109,17 @@ export function Mundo() {
       sx = Math.sin(ahora * 0.09) * 0.16 * k;
       sy = Math.cos(ahora * 0.12) * 0.07 * k;
     }
-    camera.position.lerp(camera.position.clone().set(x * 0.55 + sx + 0.62, 1.62 + sy, 3.85), 0.18);
-    camera.lookAt(x * 0.28 + 0.08, 0.55, -14);
     const vel = Math.max(0, Math.min(1, carrera.carSpeed / 100));
+    camera.position.lerp(destinoCamara.current.set(x * 0.55 + sx + 0.62, 1.62 + sy, 3.85 + vel * 0.2), 0.18);
+    camera.lookAt(x * 0.28 + 0.08, 0.55, -14);
+    if (camera instanceof THREE.PerspectiveCamera) {
+      const fov = 64 + vel * 4;
+      if (Math.abs(camera.fov - fov) > 0.02) {
+        camera.fov = fov;
+        camera.updateProjectionMatrix();
+      }
+      camera.rotation.z = -carrera.inclinacion * 0.045;
+    }
     if (rafagas.current) {
       rafagas.current.visible = vel > 0.4;
       rafagas.current.children.forEach((pieza, i) => {
@@ -134,7 +145,7 @@ export function Mundo() {
       />
       <directionalLight ref={luzLunar} position={[-25, 28, -35]} color="#aebfff" intensity={0} />
       <Cielo sol={direccionSol.current} />
-      <Environment files="/assets/secluded_beach_1k.hdr" background={false} environmentIntensity={0.42} />
+      <Environment files="/assets/secluded_beach_1k.hdr" background={false} environmentIntensity={INTENSIDAD_AMBIENTE_DIA} />
       <Stars ref={estrellas} radius={115} depth={42} count={650} factor={3.2} saturation={0.08} fade speed={0.12} />
       <mesh ref={sol}>
         <sphereGeometry args={[2.2, 24, 24]} />
@@ -171,7 +182,7 @@ export function Mundo() {
         />
         <DepthOfField focusDistance={0.016} focalLength={0.014} bokehScale={0.12} resolutionScale={0.7} />
         <Bloom intensity={0.3} luminanceThreshold={0.82} mipmapBlur />
-        <BrightnessContrast brightness={0.01} contrast={0.17} />
+        <BrightnessContrast brightness={0.015} contrast={0.08} />
         <ChromaticAberration offset={ABERRACION_LENTE} radialModulation={false} modulationOffset={0} />
         <Vignette eskil={false} offset={0.2} darkness={0.42} />
         <ToneMapping mode={ToneMappingMode.ACES_FILMIC} />

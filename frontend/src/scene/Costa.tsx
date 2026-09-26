@@ -8,19 +8,30 @@ const AGUA = {
   uniforms: {
     uTime: { value: 0 },
     uColor: { value: new THREE.Color("#1aa6d6") },
+    uShoreSide: { value: 0 },
+    uNight: { value: 0 },
   },
   vertexShader: `
     uniform float uTime;
-    varying float vOla;
-    varying vec2 vUv;
-    varying vec3 vWorldPosition;
-    void main() {
-      vec3 p = position;
-      vUv = uv;
-      vOla = sin(position.x * 0.12 + uTime * 0.65) * 0.13
-        + cos(position.y * 0.09 - uTime * 0.42) * 0.09
-        + sin((position.x + position.y) * 0.2 + uTime * 0.3) * 0.035;
-      p.z += vOla;
+      varying float vOla;
+      varying vec2 vUv;
+      varying vec3 vWorldPosition;
+      varying float vCresta;
+      varying vec3 vNormal;
+      void main() {
+        vec3 p = position;
+        vUv = uv;
+        float faseX = position.x * 0.075 + uTime * 0.38;
+        float faseY = position.y * 0.052 - uTime * 0.31;
+        float faseCorta = position.x * 0.21 + position.y * 0.13 + uTime * 0.62;
+        float ondaLarga = sin(faseX) * 0.105 + cos(faseY) * 0.072;
+        float ondaCorta = sin(faseCorta) * 0.022;
+        vOla = ondaLarga + ondaCorta;
+        vCresta = clamp((ondaLarga + 0.12) * 3.2, 0.0, 1.0);
+        float pendienteX = cos(faseX) * 0.007875 + cos(faseCorta) * 0.00462;
+        float pendienteY = -sin(faseY) * 0.003744 + cos(faseCorta) * 0.00286;
+        vNormal = normalize(mat3(modelMatrix) * vec3(-pendienteX, -pendienteY, 1.0));
+        p.z += vOla;
       vec4 mvPosition = modelViewMatrix * vec4(p, 1.0);
       vWorldPosition = (modelMatrix * vec4(p, 1.0)).xyz;
       gl_Position = projectionMatrix * mvPosition;
@@ -28,22 +39,47 @@ const AGUA = {
   `,
   fragmentShader: `
     uniform vec3 uColor;
+    uniform float uTime;
+    uniform float uShoreSide;
+    uniform float uNight;
     varying float vOla;
     varying vec2 vUv;
     varying vec3 vWorldPosition;
+    varying float vCresta;
+    varying vec3 vNormal;
     void main() {
       vec3 viewDir = normalize(cameraPosition - vWorldPosition);
-      float fresnel = pow(1.0 - clamp(abs(viewDir.y), 0.0, 1.0), 3.0);
-      float glint = pow(max(0.0, sin(vUv.x * 410.0 + vUv.y * 125.0 + vOla * 18.0)), 24.0) * 0.16;
-      vec3 reflectionTint = vec3(0.36, 0.72, 0.86);
-      vec3 color = mix(uColor, reflectionTint, fresnel * 0.48) + vec3(glint + vOla * 0.045);
+      vec3 normal = normalize(vNormal);
+      float detailX = sin(vUv.x * 108.0 + sin(vUv.y * 34.0 + uTime * 1.1) * 1.6);
+      float detailY = cos(vUv.y * 164.0 - sin(vUv.x * 47.0 + uTime * 0.8) * 1.4);
+      normal = normalize(normal + vec3(detailX * 0.095, 0.0, detailY * 0.095));
+      float fresnel = pow(1.0 - clamp(abs(dot(normal, viewDir)), 0.0, 1.0), 2.4);
+      float rippleA = sin(vUv.x * 142.0 + sin(vUv.y * 41.0 + uTime * 0.72) * 1.7 + uTime * 0.8);
+      float rippleB = cos(vUv.y * 217.0 - uTime * 0.65 + sin(vUv.x * 57.0) * 1.2);
+      float ripples = rippleA * rippleB;
+      float reflected = pow(max(0.0, dot(reflect(-viewDir, normal), normalize(vec3(-0.18, 0.92, 0.36)))), 27.0);
+      float glint = reflected * mix(0.7, 0.16, uNight)
+        + pow(0.5 + 0.5 * ripples, 7.0) * mix(0.18, 0.035, uNight);
+      float shoreDistance = mix(vUv.x, 1.0 - vUv.x, uShoreSide);
+      float shoreBand = 1.0 - smoothstep(0.012, 0.09, shoreDistance);
+      float foamNoise = 0.5 + 0.5 * sin(vUv.y * 198.0 + sin(vUv.x * 53.0) * 5.0 + uTime * 1.2 + rippleA * 0.6);
+      float foam = shoreBand * smoothstep(0.38, 0.84, foamNoise) * mix(0.19, 0.075, uNight);
+      vec3 reflectionTint = mix(vec3(0.34, 0.53, 0.64), vec3(0.035, 0.085, 0.16), uNight);
+      vec3 color = uColor * (0.86 + ripples * 0.18 + vCresta * 0.045);
+      color = mix(color, reflectionTint, fresnel * mix(0.42, 0.28, uNight));
+      color += mix(vec3(0.8, 0.91, 0.96), vec3(0.15, 0.28, 0.43), uNight) * (glint * mix(0.68, 0.34, uNight));
+      color += vec3(max(ripples, 0.0) * mix(0.07, 0.018, uNight));
+      color = mix(color, mix(vec3(0.62, 0.79, 0.84), vec3(0.08, 0.16, 0.25), uNight), foam);
       gl_FragColor = vec4(color, 1.0);
     }
   `,
 };
-const AGUA_DIA = new THREE.Color("#13aeca");
-const AGUA_TARDE = new THREE.Color("#ee8d83");
-const AGUA_NOCHE = new THREE.Color("#0c3a58");
+const AGUA_DIA = new THREE.Color("#2c9ab6");
+const AGUA_TARDE = new THREE.Color("#c27c75");
+const AGUA_NOCHE = new THREE.Color("#071c30");
+const ARENA_DIA = new THREE.Color("#d2bd92");
+const ARENA_TARDE = new THREE.Color("#a9856e");
+const ARENA_NOCHE = new THREE.Color("#1c2530");
 const PASTO_DIA = new THREE.Color("#1f9a48");
 const PASTO_TARDE = new THREE.Color("#a57842");
 const PASTO_NOCHE = new THREE.Color("#183d35");
@@ -51,6 +87,7 @@ const HOJAS_DIA = new THREE.Color("#22a34a");
 const HOJAS_TARDE = new THREE.Color("#b58245");
 const HOJAS_NOCHE = new THREE.Color("#174b46");
 const MAT_PASTO = new THREE.MeshStandardMaterial({ color: PASTO_DIA, roughness: 1 });
+const MAT_ARENA = new THREE.MeshStandardMaterial({ color: ARENA_DIA, roughness: 0.96 });
 const MAT_HOJAS = new THREE.MeshStandardMaterial({
   color: HOJAS_DIA,
   emissive: "#0a2410",
@@ -59,7 +96,12 @@ const MAT_HOJAS = new THREE.MeshStandardMaterial({
   side: THREE.DoubleSide,
   vertexColors: true,
 });
-const FRONDAS_GEOMETRIA = crearFrondas();
+const FRONDAS_GEOMETRIAS = [
+  crearFrondas(9, 2.05, 20, 0.92),
+  crearFrondas(10, 2.25, 22, 1),
+  crearFrondas(11, 2.12, 24, 1.08),
+  crearFrondas(8, 2.38, 19, 0.96),
+];
 const COLOR_ROCA = new THREE.Color("#6e766d");
 
 const SIERRAS = [
@@ -68,7 +110,7 @@ const SIERRAS = [
   { x: -113, z: -188, ancho: 112, alto: 21, fondo: 16, semilla: 7.3 },
 ].map((sierra) => ({ ...sierra, geometria: crearSierra(sierra.ancho, sierra.alto, sierra.fondo, sierra.semilla) }));
 
-function crearFrondas() {
+function crearFrondas(cantidad: number, largoMaximo: number, foliolos: number, inclinacion: number) {
   const vertices: number[] = [];
   const colores: number[] = [];
   const indices: number[] = [];
@@ -82,10 +124,10 @@ function crearFrondas() {
     colores.push(tono, tono * 1.04, tono * 0.84);
     return índice;
   };
-  for (let hoja = 0; hoja < 10; hoja += 1) {
-    const ángulo = (hoja / 10) * Math.PI * 2;
-    const curva = (t: number) => 2.25 * t;
-    const altura = (t: number) => 2.05 * t * (1 - t) - 0.5 * t;
+  for (let hoja = 0; hoja < cantidad; hoja += 1) {
+    const ángulo = (hoja / cantidad) * Math.PI * 2 + cantidad * 0.037;
+    const curva = (t: number) => largoMaximo * t;
+    const altura = (t: number) => inclinacion * t * (1 - t) - 0.5 * t;
     const eje = vertices.length / 3;
     for (let i = 0; i <= 18; i += 1) {
       const t = i / 18;
@@ -101,8 +143,8 @@ function crearFrondas() {
         indices.push(a, b, a + 1, b, b + 1, a + 1, a + 1, b + 1, a + 2, b + 1, b + 2, a + 2);
       }
     }
-    for (let i = 1; i <= 22; i += 1) {
-      const t = 0.075 + i * 0.039;
+    for (let i = 1; i <= foliolos; i += 1) {
+      const t = 0.075 + (i / foliolos) * 0.84;
       const r = curva(t);
       const y = altura(t);
       const largo = 0.68 * Math.sin(Math.PI * t) ** 0.34 * (1 - t * 0.48);
@@ -184,15 +226,18 @@ function crearSierra(ancho: number, alto: number, fondo: number, semilla: number
 
 export function Costa() {
   const palmas = useRef<(Group | null)[]>([]);
-  const agua = useRef<ShaderMaterial>(null);
+  const aguas = useRef<(ShaderMaterial | null)[]>([]);
   const marcas = useMemo(() => Array.from({ length: 28 }, (_, i) => i * 36), []);
   useFrame((_, dt) => {
-    AGUA.uniforms.uTime.value += dt;
     const c = momento();
-    if (agua.current) {
-      agua.current.uniforms.uColor.value.copy(AGUA_DIA).lerp(AGUA_TARDE, c.calor).lerp(AGUA_NOCHE, c.noche);
-    }
+    aguas.current.forEach((material) => {
+      if (!material) return;
+      material.uniforms.uTime.value += dt;
+      material.uniforms.uColor.value.copy(AGUA_DIA).lerp(AGUA_TARDE, c.calor).lerp(AGUA_NOCHE, c.noche);
+      material.uniforms.uNight.value = c.noche;
+    });
     MAT_PASTO.color.copy(PASTO_DIA).lerp(PASTO_TARDE, c.calor).lerp(PASTO_NOCHE, c.noche);
+    MAT_ARENA.color.copy(ARENA_DIA).lerp(ARENA_TARDE, c.calor).lerp(ARENA_NOCHE, c.noche);
     MAT_HOJAS.color.copy(HOJAS_DIA).lerp(HOJAS_TARDE, c.calor).lerp(HOJAS_NOCHE, c.noche);
     MAT_HOJAS.emissiveIntensity = 0.2 + c.noche * 0.12;
     marcas.forEach((marca, i) => {
@@ -202,7 +247,14 @@ export function Costa() {
       palma.visible = dist > 8 && dist < 780;
       const lado = i % 2 === 0 ? -1 : 1;
       palma.position.set(lado * (9.1 + (i % 4) * 0.42), 0, -dist * ESCALA);
-      palma.rotation.z = Math.sin(carrera.s * 0.02 + i) * 0.04;
+      const viento = performance.now() * 0.00055 + i * 1.73;
+      palma.rotation.z = Math.sin(carrera.s * 0.02 + i) * 0.012 + Math.sin(viento) * 0.006;
+      const tronco = palma.children[0];
+      const copa = tronco?.children[1];
+      if (copa) {
+        copa.rotation.z = Math.sin(viento) * 0.028;
+        copa.rotation.x = Math.cos(viento * 0.78) * 0.018;
+      }
     });
   });
   return (
@@ -213,13 +265,23 @@ export function Costa() {
       </mesh>
       {[-1, 1].map((lado) => (
         <group key={lado}>
-          <mesh rotation-x={-Math.PI / 2} position={[lado * 24, -0.045, -80]}>
-            <planeGeometry args={[18, 280]} />
-            <meshStandardMaterial color="#d9bd83" roughness={0.94} />
+          <mesh rotation-x={-Math.PI / 2} position={[lado * 19, -0.045, -80]}>
+            <planeGeometry args={[8, 280]} />
+            <primitive object={MAT_ARENA} attach="material" />
           </mesh>
-          <mesh rotation-x={-Math.PI / 2} position={[lado * 68, -0.11, -80]}>
-            <planeGeometry args={[70, 360, 28, 64]} />
-            <shaderMaterial ref={lado === 1 ? agua : undefined} {...AGUA} />
+          <mesh rotation-x={-Math.PI / 2} position={[lado * 65, -0.045, -80]}>
+            <planeGeometry args={[84, 360, 36, 72]} />
+            <shaderMaterial
+              ref={(material) => { aguas.current[lado < 0 ? 0 : 1] = material; }}
+              uniforms={{
+                uTime: { value: 0 },
+                uColor: { value: AGUA_DIA.clone() },
+                uShoreSide: { value: lado < 0 ? 1 : 0 },
+                uNight: { value: 0 },
+              }}
+              vertexShader={AGUA.vertexShader}
+              fragmentShader={AGUA.fragmentShader}
+            />
           </mesh>
         </group>
       ))}
@@ -230,7 +292,7 @@ export function Costa() {
       ))}
       {marcas.map((marca, i) => (
         <group key={marca} ref={(nodo) => { palmas.current[i] = nodo; }}>
-          <Palmera escala={0.85 + (i % 3) * 0.12} semilla={i} />
+        <Palmera escala={0.85 + (i % 3) * 0.12} semilla={i} />
         </group>
       ))}
       <Faro />
@@ -246,7 +308,7 @@ function Palmera({ escala, semilla }: { escala: number; semilla: number }) {
         <meshStandardMaterial color="#755039" roughness={0.88} />
       </mesh>
       <mesh position={[0, 3.35, 0]} castShadow={false} rotation-y={semilla * 0.41}>
-        <primitive object={FRONDAS_GEOMETRIA} attach="geometry" />
+        <primitive object={FRONDAS_GEOMETRIAS[semilla % FRONDAS_GEOMETRIAS.length]} attach="geometry" />
         <primitive object={MAT_HOJAS} attach="material" />
       </mesh>
     </group>

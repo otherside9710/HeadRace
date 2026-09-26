@@ -4,16 +4,19 @@ import {
   carrera,
   cargarHistorial,
   conectar,
+  LIMITE_CHOQUES,
   momento,
+  reiniciarCarrera,
   soltarObstaculo,
   terminarSesion,
-  type Fila,
+  type MejorCarrera,
 } from "../game/carrera";
 import "./hud.css";
 
 export function Hud() {
   const [, setTick] = useState(0);
   const [sonido, setSonido] = useState(false);
+  const [mostrarTop10, setMostrarTop10] = useState(false);
   useEffect(() => {
     conectar();
     void cargarHistorial();
@@ -26,10 +29,20 @@ export function Hud() {
       actualizarMotor(0, false);
     };
   }, []);
+  useEffect(() => {
+    if (!mostrarTop10) return;
+    const cerrarConEscape = (evento: KeyboardEvent) => {
+      if (evento.key === "Escape") setMostrarTop10(false);
+    };
+    window.addEventListener("keydown", cerrarConEscape);
+    return () => window.removeEventListener("keydown", cerrarConEscape);
+  }, [mostrarTop10]);
   const fase = momento();
   const vel = carrera.recibido ? carrera.carSpeed : 0;
   const aviso = carrera.detenida
-    ? "Sesión terminada"
+    ? carrera.derrotada
+      ? `¡Carrera perdida! Alcanzaste ${LIMITE_CHOQUES} choques`
+      : "Sesión terminada"
     : carrera.alert
       ? "Obstáculo del sensor · frenando"
       : carrera.captura === "sin_rostro"
@@ -54,8 +67,12 @@ export function Hud() {
             <strong>{carrera.ultimoCruce === 0 ? "—" : carrera.segundos.toFixed(1) + "s"}</strong>
           </div>
           <div className="vidrio">
-            <span>CHOQUES</span>
-            <strong className={carrera.colisiones > 0 ? "malo" : ""}>{carrera.colisiones}</strong>
+            <span>VUELTAS</span>
+            <strong>{carrera.vueltasCarrera}</strong>
+          </div>
+        <div className="vidrio">
+          <span>CHOQUES</span>
+          <strong className={carrera.colisionesCarrera > 0 ? "malo" : ""}>{carrera.colisionesCarrera}</strong>
           </div>
         </div>
         <div className={`dia fase-${fase.etiqueta.toLowerCase()}`} aria-live="polite">
@@ -73,7 +90,25 @@ export function Hud() {
           </header>
           {carrera.vista ? <img src={carrera.vista} alt="Cámara" /> : <div className="vacio-cam" />}
         </div>
-        {aviso ? <p className="aviso">{aviso}</p> : null}
+        {aviso || carrera.errorGuardado ? (
+          <div className={`aviso${carrera.derrotada ? " derrota" : ""}`}>
+            {aviso ? <p>{aviso}</p> : null}
+            {carrera.derrotada ? (
+              <>
+                <button type="button" className="reiniciar" onClick={() => {
+                  reiniciarCarrera();
+                  setTick((n) => n + 1);
+                }}>
+                  Reiniciar carrera
+                </button>
+                <button type="button" onClick={() => setMostrarTop10(true)}>
+                  TOP 10 carreras
+                </button>
+              </>
+            ) : null}
+            {carrera.errorGuardado ? <p className="error-guardado">{carrera.errorGuardado}</p> : null}
+          </div>
+        ) : null}
         <div className="controles">
           <button
             type="button"
@@ -96,7 +131,23 @@ export function Hud() {
         </div>
         <div className={performance.now() < carrera.flashHasta ? "impacto on" : "impacto"} />
       </div>
-      <Tiempos filas={carrera.filas} />
+      {mostrarTop10 ? (
+        <div className="modal-top10-capa" onClick={() => setMostrarTop10(false)}>
+          <section
+            className="modal-top10"
+            role="dialog"
+            aria-modal="true"
+            aria-labelledby="titulo-top10"
+            onClick={(evento) => evento.stopPropagation()}
+          >
+            <header>
+              <h2 id="titulo-top10">TOP 10 carreras</h2>
+              <button type="button" aria-label="Cerrar" onClick={() => setMostrarTop10(false)}>×</button>
+            </header>
+            <TablaCarreras filas={carrera.mejoresCarreras} />
+          </section>
+        </div>
+      ) : null}
     </>
   );
 }
@@ -145,40 +196,28 @@ function Mapa() {
   );
 }
 
-function Tiempos({ filas }: { filas: Fila[] }) {
-  if (filas.length === 0) {
-    return (
-      <section className="tiempos">
-        <h2>Mejores tiempos</h2>
-        <p>Sin vueltas todavía</p>
-      </section>
-    );
-  }
+function TablaCarreras({ filas }: { filas: MejorCarrera[] }) {
+  if (filas.length === 0) return <p>Sin vueltas registradas todavía</p>;
   return (
-    <section className="tiempos">
-      <h2>Mejores tiempos</h2>
-      <table>
-        <thead>
-          <tr>
-            <th>Tiempo</th>
-            <th>Colisiones</th>
-            <th>Alertas</th>
-            <th>Velocidad</th>
-            <th>Fecha</th>
+    <table>
+      <thead>
+        <tr>
+          <th>Fecha</th>
+          <th>Tramo</th>
+          <th>Vueltas</th>
+          <th>Choques</th>
+        </tr>
+      </thead>
+      <tbody>
+        {filas.slice(0, 10).map((fila) => (
+          <tr key={fila.carrera_id}>
+            <td>{String(fila.fecha_hora).replace("T", " ").replace("Z", "")}</td>
+            <td>{Number(fila.tramo).toFixed(1)} s</td>
+            <td>{fila.vueltas}</td>
+            <td>{fila.colisiones}</td>
           </tr>
-        </thead>
-        <tbody>
-          {filas.map((fila) => (
-            <tr key={fila.fecha_hora + String(fila.tiempo_vuelta)}>
-              <td>{Number(fila.tiempo_vuelta).toFixed(1)} s</td>
-              <td>{fila.colisiones}</td>
-              <td>{fila.eventos_obstaculo}</td>
-              <td>{fila.velocidad_promedio ?? "—"}</td>
-              <td>{String(fila.fecha_hora).replace("T", " ").replace("Z", "")}</td>
-            </tr>
-          ))}
-        </tbody>
-      </table>
-    </section>
+        ))}
+      </tbody>
+    </table>
   );
 }

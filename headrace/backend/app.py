@@ -7,7 +7,7 @@ from pathlib import Path
 from flask import Flask, jsonify, request, send_from_directory
 from flask_socketio import SocketIO
 
-from headrace.backend.sesiones import conectar, guardar, historial
+from headrace.backend.sesiones import conectar, guardar, historial, mejores_carreras, sesiones_recientes
 from headrace.captura.detector import Captura
 from headrace.control.paso import (
     EstadoCarro,
@@ -70,6 +70,28 @@ def crear_app(ruta_db: Path) -> tuple[Flask, SocketIO, EstadoApp]:
         try:
             with db_candado:
                 filas = historial(conexion)
+        except sqlite_error():
+            return jsonify(
+                {"error": {"code": "DB_NO_DISPONIBLE", "message": "No se pudo leer el historial"}}
+            ), 500
+        return jsonify(filas)
+
+    @app.get("/sesiones")
+    def ruta_sesiones_recientes():
+        try:
+            with db_candado:
+                filas = sesiones_recientes(conexion)
+        except sqlite_error():
+            return jsonify(
+                {"error": {"code": "DB_NO_DISPONIBLE", "message": "No se pudo leer el historial"}}
+            ), 500
+        return jsonify(filas)
+
+    @app.get("/mejores-carreras")
+    def ruta_mejores_carreras():
+        try:
+            with db_candado:
+                filas = mejores_carreras(conexion)
         except sqlite_error():
             return jsonify(
                 {"error": {"code": "DB_NO_DISPONIBLE", "message": "No se pudo leer el historial"}}

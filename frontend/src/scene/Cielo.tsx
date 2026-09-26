@@ -1,4 +1,4 @@
-import { useRef } from "react";
+import { useMemo, useRef } from "react";
 import { useFrame, useThree } from "@react-three/fiber";
 import * as THREE from "three";
 import type { Mesh, ShaderMaterial } from "three";
@@ -12,14 +12,6 @@ const CIELO_NOCHE = new THREE.Color("#071126");
 const HORIZONTE_NOCHE = new THREE.Color("#1a2d49");
 const LUZ_SOL_DIA = new THREE.Color("#fff0c2");
 const LUZ_SOL_TARDE = new THREE.Color("#ff9668");
-
-const UNIFORMS = {
-  uZenith: { value: CIELO_DIA.clone() },
-  uHorizon: { value: HORIZONTE_DIA.clone() },
-  uSunDirection: { value: new THREE.Vector3(0.45, 0.6, -0.65) },
-  uSunColor: { value: LUZ_SOL_DIA.clone() },
-  uNight: { value: 0 },
-};
 
 const VERTEX = `
   varying vec3 vDirection;
@@ -51,6 +43,13 @@ export function Cielo({ sol }: { sol: THREE.Vector3 }) {
   const domo = useRef<Mesh>(null);
   const material = useRef<ShaderMaterial>(null);
   const { camera } = useThree();
+  const uniforms = useMemo(() => ({
+    uZenith: { value: CIELO_DIA.clone() },
+    uHorizon: { value: HORIZONTE_DIA.clone() },
+    uSunDirection: { value: new THREE.Vector3(0.45, 0.6, -0.65) },
+    uSunColor: { value: LUZ_SOL_DIA.clone() },
+    uNight: { value: 0 },
+  }), []);
   useFrame(() => {
     const cielo = material.current;
     if (!cielo) return;
@@ -60,6 +59,9 @@ export function Cielo({ sol }: { sol: THREE.Vector3 }) {
     cielo.uniforms.uSunDirection.value.copy(sol).normalize();
     cielo.uniforms.uSunColor.value.copy(LUZ_SOL_DIA).lerp(LUZ_SOL_TARDE, fase.calor);
     cielo.uniforms.uNight.value = fase.noche;
+    // These uniforms are mutated outside React; force the shader material to upload them
+    // so the dome cannot keep the previous phase after the night-to-day transition.
+    cielo.uniformsNeedUpdate = true;
     domo.current?.position.copy(camera.position);
   });
   return (
@@ -67,7 +69,7 @@ export function Cielo({ sol }: { sol: THREE.Vector3 }) {
       <sphereGeometry args={[250, 40, 24]} />
       <shaderMaterial
         ref={material}
-        uniforms={UNIFORMS}
+        uniforms={uniforms}
         vertexShader={VERTEX}
         fragmentShader={FRAGMENT}
         side={THREE.BackSide}

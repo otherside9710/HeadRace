@@ -5,9 +5,9 @@ import { ESCALA, carrera, momento } from "../game/carrera";
 
 const LARGO = 200;
 const ANCHO = 12;
-const ASFALTO_DIA = new THREE.Color("#626773");
-const ASFALTO_TARDE = new THREE.Color("#77615e");
-const ASFALTO_NOCHE = new THREE.Color("#20283a");
+const ASFALTO_DIA = new THREE.Color("#9298a0");
+const ASFALTO_TARDE = new THREE.Color("#97796f");
+const ASFALTO_NOCHE = new THREE.Color("#596478");
 const LINEAS_DIA = new THREE.Color("#ffffff");
 const LINEAS_NOCHE = new THREE.Color("#b8d9ff");
 const ESCALA_NORMAL = new THREE.Vector2(0.16, 0.16);
@@ -62,7 +62,19 @@ function texturaAsfalto() {
     semilla = (semilla * 1664525 + 1013904223) >>> 0;
     return semilla / 4294967296;
   };
-  for (let i = 0; i < alturas.length; i += 1) alturas[i] = 116 + Math.floor(aleatorio() * 28);
+  for (let y = 0; y < size; y += 1) {
+    for (let x = 0; x < size; x += 1) {
+      const u = x / size;
+      const v = y / size;
+      const nubes = Math.sin(u * Math.PI * 14 + Math.sin(v * Math.PI * 4)) * 3
+        + Math.cos(v * Math.PI * 10 - u * Math.PI * 6) * 2;
+      const huella = (
+        Math.exp(-(((u - 0.34) / 0.045) ** 2))
+        + Math.exp(-(((u - 0.66) / 0.045) ** 2))
+      ) * (2 + Math.sin(v * Math.PI * 22) * 1.5);
+      alturas[y * size + x] = THREE.MathUtils.clamp(150 + Math.floor(aleatorio() * 25 + nubes - huella), 0, 255);
+    }
+  }
 
   const difuso = new Uint8Array(size * size * 4);
   const normales = new Uint8Array(size * size * 4);
@@ -88,10 +100,11 @@ function texturaAsfalto() {
     const texture = new THREE.DataTexture(data, size, size, THREE.RGBAFormat);
     texture.wrapS = THREE.RepeatWrapping;
     texture.wrapT = THREE.RepeatWrapping;
-    texture.repeat.set(3, 64);
+    texture.repeat.set(1, 64);
     texture.magFilter = THREE.LinearFilter;
     texture.minFilter = THREE.LinearMipmapLinearFilter;
     texture.generateMipmaps = true;
+    texture.anisotropy = 8;
     texture.colorSpace = colorSpace;
     texture.needsUpdate = true;
     return texture;
@@ -128,7 +141,7 @@ export function Pista() {
           normalScale={ESCALA_NORMAL}
           roughnessMap={asfaltoMapas.roughnessMap}
           roughness={0.82}
-          color="#626773"
+          color="#9298a0"
           metalness={0.06}
         />
       </mesh>

@@ -9,6 +9,8 @@ const CARROCERIA = crearCarroceria();
 const PONTON = crearPonton();
 const TEXTURA_PINTURA = crearTexturaPintura();
 const NORMAL_PINTURA = crearNormalPintura();
+const RUGOSIDAD_PINTURA = crearMapaMicrodetalle(128, 219, 250, 71829);
+const RUGOSIDAD_NEUMATICO = crearMapaMicrodetalle(64, 184, 255, 49531);
 const CARBONO = new THREE.MeshStandardMaterial({ color: "#101923", roughness: 0.68, metalness: 0.32 });
 
 function crearTexturaPintura() {
@@ -59,8 +61,8 @@ function crearNormalPintura() {
   let seed = 49531;
   for (let i = 0; i < data.length; i += 4) {
     seed = (seed * 1664525 + 1013904223) >>> 0;
-    data[i] = 126 + (seed & 3);
-    data[i + 1] = 126 + ((seed >>> 3) & 3);
+    data[i] = 120 + (seed & 15);
+    data[i + 1] = 120 + ((seed >>> 3) & 15);
     data[i + 2] = 255;
     data[i + 3] = 255;
   }
@@ -68,6 +70,28 @@ function crearNormalPintura() {
   texture.wrapS = THREE.RepeatWrapping;
   texture.wrapT = THREE.RepeatWrapping;
   texture.repeat.set(4, 8);
+  texture.minFilter = THREE.LinearMipmapLinearFilter;
+  texture.magFilter = THREE.LinearFilter;
+  texture.generateMipmaps = true;
+  texture.needsUpdate = true;
+  return texture;
+}
+
+function crearMapaMicrodetalle(size: number, minimo: number, maximo: number, semillaInicial: number) {
+  const data = new Uint8Array(size * size * 4);
+  let seed = semillaInicial;
+  for (let i = 0; i < data.length; i += 4) {
+    seed = (seed * 1664525 + 1013904223) >>> 0;
+    const nivel = minimo + (seed % (maximo - minimo + 1));
+    data[i] = nivel;
+    data[i + 1] = nivel;
+    data[i + 2] = nivel;
+    data[i + 3] = 255;
+  }
+  const texture = new THREE.DataTexture(data, size, size, THREE.RGBAFormat);
+  texture.wrapS = THREE.RepeatWrapping;
+  texture.wrapT = THREE.RepeatWrapping;
+  texture.repeat.set(3, 6);
   texture.minFilter = THREE.LinearMipmapLinearFilter;
   texture.magFilter = THREE.LinearFilter;
   texture.generateMipmaps = true;
@@ -187,16 +211,17 @@ export function Kart() {
           color="#14c8d0"
           map={TEXTURA_PINTURA}
           normalMap={NORMAL_PINTURA}
-          normalScale={new THREE.Vector2(0.025, 0.025)}
-          roughness={0.24}
-          metalness={0.34}
-          clearcoat={1}
-          clearcoatRoughness={0.16}
+          normalScale={new THREE.Vector2(0.035, 0.035)}
+          roughnessMap={RUGOSIDAD_PINTURA}
+          roughness={0.29}
+          metalness={0.22}
+          clearcoat={0.9}
+          clearcoatRoughness={0.21}
         />
       </mesh>
       {[-0.51, 0.51].map((x) => (
         <mesh key={x} position={[x, 0, 0.2]} geometry={PONTON} castShadow receiveShadow>
-          <meshPhysicalMaterial color="#087b91" roughness={0.3} metalness={0.34} clearcoat={0.88} clearcoatRoughness={0.18} />
+          <meshPhysicalMaterial color="#087b91" roughness={0.32} metalness={0.24} clearcoat={0.82} clearcoatRoughness={0.23} />
         </mesh>
       ))}
       {[-0.12, 0, 0.12].map((x, i) => (
@@ -316,7 +341,7 @@ function Rueda({ x, z, escala }: { x: number; z: number; escala: number }) {
       <group ref={giro}>
         <mesh castShadow>
           <cylinderGeometry args={[0.34 * escala, 0.34 * escala, 0.25, 32]} />
-          <meshStandardMaterial color="#101722" roughness={0.78} />
+          <meshStandardMaterial color="#101722" roughnessMap={RUGOSIDAD_NEUMATICO} bumpMap={RUGOSIDAD_NEUMATICO} bumpScale={0.012} roughness={0.94} metalness={0} />
         </mesh>
         <instancedMesh ref={ranuras} args={[geometriaRanura, MATERIAL_RANURAS, 32]} />
         <mesh>

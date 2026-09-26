@@ -12,14 +12,24 @@ def conectar(ruta: Path) -> sqlite3.Connection:
         CREATE TABLE IF NOT EXISTS sesiones (
             id INTEGER PRIMARY KEY AUTOINCREMENT,
             evento_id TEXT NOT NULL UNIQUE,
+            carrera_id TEXT,
             fecha_hora TEXT NOT NULL,
             tiempo_vuelta REAL,
+            duracion_tramo REAL NOT NULL DEFAULT 0,
             colisiones INTEGER NOT NULL DEFAULT 0,
             eventos_obstaculo INTEGER NOT NULL DEFAULT 0,
             velocidad_promedio REAL,
             motivo TEXT NOT NULL CHECK (motivo IN ('vuelta_completa', 'fin_sesion'))
         )
         """
+    )
+    columnas = {fila["name"] for fila in conexion.execute("PRAGMA table_info(sesiones)")}
+    if "carrera_id" not in columnas:
+        conexion.execute("ALTER TABLE sesiones ADD COLUMN carrera_id TEXT")
+    if "duracion_tramo" not in columnas:
+        conexion.execute("ALTER TABLE sesiones ADD COLUMN duracion_tramo REAL NOT NULL DEFAULT 0")
+    conexion.execute(
+        "CREATE INDEX IF NOT EXISTS idx_sesiones_carrera ON sesiones(carrera_id, motivo)"
     )
     conexion.commit()
     return conexion
@@ -42,6 +52,9 @@ def _validar(cuerpo: dict) -> dict:
     motivo = cuerpo.get("motivo")
     if motivo not in ("vuelta_completa", "fin_sesion"):
         raise ValueError("motivo debe ser vuelta_completa o fin_sesion")
+    carrera_id = cuerpo.get("carrera_id")
+    if carrera_id is not None and (not isinstance(carrera_id, str) or not carrera_id.strip()):
+        raise ValueError("carrera_id debe ser texto no vacio o nulo")
     tiempo = cuerpo.get("tiempo_vuelta")
     if motivo == "vuelta_completa":
         if isinstance(tiempo, bool) or not isinstance(tiempo, (int, float)) or tiempo <= 0:
@@ -56,10 +69,15 @@ def _validar(cuerpo: dict) -> dict:
         if isinstance(promedio, bool) or not isinstance(promedio, (int, float)):
             raise ValueError("velocidad_promedio debe ser numerica o nula")
         promedio = float(promedio)
+    duracion_tramo = cuerpo.get("duracion_tramo", 0)
+    if isinstance(duracion_tramo, bool) or not isinstance(duracion_tramo, (int, float)) or duracion_tramo < 0:
+        raise ValueError("duracion_tramo debe ser numerica mayor o igual a 0")
     return {
         "evento_id": evento_id.strip(),
+        "carrera_id": carrera_id.strip() if carrera_id else None,
         "motivo": motivo,
         "tiempo_vuelta": tiempo,
+        "duracion_tramo": float(duracion_tramo),
         "colisiones": _entero_no_negativo(cuerpo.get("colisiones", 0), "colisiones"),
         "eventos_obstaculo": _entero_no_negativo(
             cuerpo.get("eventos_obstaculo", 0), "eventos_obstaculo"
@@ -72,8 +90,10 @@ def _fila_publica(fila: sqlite3.Row) -> dict:
     return {
         "id": fila["id"],
         "evento_id": fila["evento_id"],
+        "carrera_id": fila["carrera_id"],
         "fecha_hora": fila["fecha_hora"],
         "tiempo_vuelta": fila["tiempo_vuelta"],
+        "duracion_tramo": fila["duracion_tramo"],
         "colisiones": fila["colisiones"],
         "eventos_obstaculo": fila["eventos_obstaculo"],
         "velocidad_promedio": fila["velocidad_promedio"],
@@ -94,14 +114,16 @@ def guardar(conexion: sqlite3.Connection, cuerpo: dict) -> tuple[int, dict]:
         conexion.execute(
             """
             INSERT INTO sesiones (
-                evento_id, fecha_hora, tiempo_vuelta, colisiones,
+                evento_id, carrera_id, fecha_hora, tiempo_vuelta, duracion_tramo, colisiones,
                 eventos_obstaculo, velocidad_promedio, motivo
-            ) VALUES (?, ?, ?, ?, ?, ?, ?)
+            ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)
             """,
             (
                 datos["evento_id"],
+                datos["carrera_id"],
                 fecha,
                 datos["tiempo_vuelta"],
+                datos["duracion_tramo"],
                 datos["colisiones"],
                 datos["eventos_obstaculo"],
                 datos["velocidad_promedio"],
@@ -139,6 +161,60 @@ def historial(conexion: sqlite3.Connection) -> list[dict]:
         }
         for fila in filas
     ]
+
+
+def sesiones_recientes(conexion: sqlite3.Connection, limite: int = 20) -> list[dict]:
+    filas = conexion.execute(
+        """
+        SELECT carrera_id,
+               MIN(fecha_hora) AS fecha_hora,
+               SUM(CASE WHEN motivo = 'vuelta_completa' THEN 1 ELSE 0 END) AS vueltas,
+               CASE WHEN MAX(duracion_tramo) > 0 THEN MAX(duracion_tramo)
+                    ELSE SUM(CASE WHEN motivo = 'vuelta_completa' THEN COALESCE(tiempo_vuelta, 10) ELSE 0 END)
+               END AS tramo,
+               MAX(colisiones) AS colisiones,
+               MAX(id) AS ultimo_registro
+        FROM sesiones
+        WHERE carrera_id IS NOT NULL
+        GROUP BY carrera_id
+        ORDER BY ultimo_registro DESC
+        LIMIT ?
+        """,
+        (limite,),
+    ).fetchall()
+    return [
+        {
+            "carrera_id": fila["carrera_id"],
+            "fecha_hora": fila["fecha_hora"],
+            "vueltas": fila["vueltas"],
+            "tramo": fila["tramo"],
+            "colisiones": fila["colisiones"],
+        }
+        for fila in filas
+    ]
+
+
+def mejores_carreras(conexion: sqlite3.Connection, limite: int = 10) -> list[dict]:
+    filas = conexion.execute(
+        """
+        SELECT carrera_id,
+               MIN(fecha_hora) AS fecha_hora,
+               SUM(CASE WHEN motivo = 'vuelta_completa' THEN 1 ELSE 0 END) AS vueltas,
+               CASE WHEN MAX(duracion_tramo) > 0 THEN MAX(duracion_tramo)
+                    ELSE SUM(CASE WHEN motivo = 'vuelta_completa' THEN COALESCE(tiempo_vuelta, 10) ELSE 0 END)
+               END AS tramo,
+               MAX(colisiones) AS colisiones,
+               MAX(eventos_obstaculo) AS eventos_obstaculo,
+               MAX(velocidad_promedio) AS velocidad_promedio
+        FROM sesiones
+        WHERE carrera_id IS NOT NULL
+        GROUP BY carrera_id
+        ORDER BY vueltas DESC, fecha_hora ASC
+        LIMIT ?
+        """,
+        (limite,),
+    ).fetchall()
+    return [dict(fila) for fila in filas]
 
 
 def contar(conexion: sqlite3.Connection) -> int:
