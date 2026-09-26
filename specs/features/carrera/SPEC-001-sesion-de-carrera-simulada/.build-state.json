@@ -1,0 +1,37 @@
+{
+  "spec_id": "SPEC-001",
+  "estado": "LISTO_PARA_CERTIFICACION",
+  "ultimo_task_completado": "TASK-008",
+  "completados": [
+    "TASK-001",
+    "TASK-002",
+    "TASK-003",
+    "TASK-004",
+    "TASK-005",
+    "TASK-006",
+    "TASK-007",
+    "TASK-008"
+  ],
+  "pendientes": [],
+  "archivos_creados": [
+    "main.py",
+    "requirements.txt",
+    "README.md",
+    "headrace/parametros.py",
+    "headrace/control/pid.py",
+    "headrace/control/difusa.py",
+    "headrace/control/paso.py",
+    "headrace/captura/detector.py",
+    "headrace/backend/sesiones.py",
+    "headrace/backend/app.py",
+    "headrace/web/index.html",
+    "headrace/web/pista.js"
+  ],
+  "decisiones_tomadas": [
+    "La cámara se abre en el hilo principal para que macOS pueda pedir permiso.",
+    "OpenCV se importa dentro de la captura: si falta o la cámara no abre, Flask sigue sirviendo la pista."
+  ],
+  "siguiente_accion": "Usar python main.py. Este SDD no continúa en /sdd-test.",
+  "ramas": {},
+  "nota": "Workspace local-headrace. Sin remoto Azure y sin test-plan, por decisión del proyecto."
+}

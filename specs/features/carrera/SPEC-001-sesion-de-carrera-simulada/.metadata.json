@@ -1,0 +1,53 @@
+{
+  "id": "SPEC-001",
+  "slug": "sesion-de-carrera-simulada",
+  "module": "carrera",
+  "workspace": "local-headrace",
+  "nombre": "sesion-de-carrera-simulada",
+  "version": "1.0",
+  "estado": "LISTO_PARA_CERTIFICACION",
+  "tipo": "feature",
+  "prioridad": "high",
+  "resumen": "Carrera HeadRace de punta a punta sin hardware: cámara, PID, lógica difusa, pista y SQLite. El núcleo de control se sustituye por el ESP32 cuando llegue.",
+  "fecha_creacion": "2026-09-25T23:12:00-05:00",
+  "fecha_aprobacion": "2026-09-25T23:14:00-05:00",
+  "aprobado_por": "Julio Sarmiento Peña",
+  "creado_por": "Julio Sarmiento Peña",
+  "owner": "Julio Sarmiento Peña",
+  "linked_repos": [],
+  "ado": {
+    "epic_id": null,
+    "feature_id": null,
+    "iteration": null
+  },
+  "migration": {
+    "migrated": false,
+    "migrated_at": null,
+    "migrated_by": null,
+    "original_path": null,
+    "completeness": null,
+    "missing_artifacts": []
+  },
+  "archivos": [
+    "SPEC.md",
+    "requirements.md",
+    "design.md",
+    "tasks.md",
+    "adr/",
+    "changelog.md"
+  ],
+  "sdd_custom": {
+    "pruebas": false,
+    "nota": "Este SDD no incluye test-plan ni casos de prueba."
+  },
+  "criterios_aceptacion": {
+    "total": 18,
+    "cubiertos_por_tests": null
+  },
+  "riesgos": {
+    "total": 4,
+    "criticos": 0
+  },
+  "historial": [],
+  "siguiente_paso_recomendado": "/sdd-build SPEC-001"
+}

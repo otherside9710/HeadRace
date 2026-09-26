@@ -1,0 +1,7 @@
+.venv/
+__pycache__/
+*.pyc
+data/*.sqlite
+.DS_Store
+node_modules/
+headrace/web/dist/
