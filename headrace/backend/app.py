@@ -75,16 +75,6 @@ def crear_app(ruta_db: Path) -> tuple[Flask, SocketIO, EstadoApp]:
     def assets(nombre: str):
         return send_from_directory(DIST / "assets", nombre)
 
-    @app.get("/pista.js")
-    def script_pista():
-        return send_from_directory(WEB, "pista.js")
-
-    @app.get("/juego/<path:nombre>")
-    def archivo_juego(nombre: str):
-        respuesta = send_from_directory(WEB / "juego", nombre)
-        respuesta.headers["Cache-Control"] = "no-store"
-        return respuesta
-
     @app.get("/historial")
     def ruta_historial():
         try:
