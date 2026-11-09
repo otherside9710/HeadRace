@@ -1,7 +1,8 @@
 export const N_CARRILES = 3;
 export const CENTROS_M = [-4, 0, 4] as const;
 export const ANCHO_CARRIL_M = 4;
-export const ENTRAR = 16;
+const ENTRAR_IZQUIERDA = 14;
+const ENTRAR_DERECHA = 10;
 export const ZONA_CENTRO = 8;
 export const REACCION = 48;
 export const LARGO_PISTA = 1000;
@@ -9,7 +10,7 @@ const TIEMPO_SUAVE = 0.16;
 const VEL_MAX = 12;
 
 export type TipoObs = "cono" | "caja" | "barrera";
-export type ObsCarril = { s: number; carril: number; tipo: TipoObs };
+export type ObsCarril = { s: number; carril: number; tipo: TipoObs; destruidoAt?: number };
 
 export const RADIO_M: Record<TipoObs, number> = {
   cono: 1.05,
@@ -37,8 +38,8 @@ export function centroCarril(carril: number) {
 }
 
 export function carrilDesdeCabeza(carX: number, actual: number) {
-  if (carX <= -ENTRAR) return 0;
-  if (carX >= ENTRAR) return 2;
+  if (carX <= -ENTRAR_IZQUIERDA) return 0;
+  if (carX >= ENTRAR_DERECHA) return 2;
   if (Math.abs(carX) <= ZONA_CENTRO) return 1;
   return actual;
 }

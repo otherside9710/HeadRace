@@ -23,6 +23,25 @@ else
   exit 1
 fi
 
+if [[ -z "${HEADRACE_PORT:-}" ]]; then
+  HEADRACE_PORT="$("$PYTHON" - <<'PY'
+import socket
+
+for port in range(5000, 5010):
+    with socket.socket() as server:
+        try:
+            server.bind(("127.0.0.1", port))
+        except OSError:
+            continue
+        print(port)
+        break
+else:
+    raise SystemExit("No hay puertos libres entre 5000 y 5009.")
+PY
+)"
+fi
+export HEADRACE_PORT
+
 cleanup() {
   trap - EXIT INT TERM
   for pid in "${BACKEND_PID:-}" "${FRONTEND_PID:-}"; do
@@ -48,7 +67,7 @@ FRONTEND_PID=$!
 
 echo "HeadRace está iniciando:"
 echo "  Juego (React + Vite): http://127.0.0.1:5173/"
-echo "  Backend (Flask):      http://127.0.0.1:5000/"
+echo "  Backend (Flask):      http://127.0.0.1:$HEADRACE_PORT/"
 echo "Pulsa Ctrl+C para detener ambos procesos."
 
 is_running() {

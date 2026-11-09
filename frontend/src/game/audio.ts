@@ -1,63 +1,123 @@
+type Efecto = "escudo-activar" | "escudo-desactivar" | "explosion";
+
+const INICIO_AUDIO_MOTOR_S = 2;
 let contexto: AudioContext | null = null;
-let motor: OscillatorNode | null = null;
-let armonico: OscillatorNode | null = null;
-let filtroMotor: BiquadFilterNode | null = null;
-let volumenMotor: GainNode | null = null;
 let habilitado = false;
+let motorEnMarcha = false;
+let motor: HTMLAudioElement | null = null;
+const efectos = new Map<Efecto, HTMLAudioElement>();
+const efectosActivos = new Set<HTMLAudioElement>();
 
-/** Habilita Web Audio desde una interacción explícita del usuario. */
-export async function activarAudio() {
-  const AudioContextWeb = window.AudioContext;
-  if (!AudioContextWeb) return false;
+function rutaAudio(nombre: string) {
+  return `${import.meta.env.BASE_URL}audio/${nombre}.mp3`;
+}
 
-  if (!contexto) {
-    contexto = new AudioContextWeb();
-    filtroMotor = contexto.createBiquadFilter();
-    filtroMotor.type = "lowpass";
-    filtroMotor.frequency.value = 420;
-    volumenMotor = contexto.createGain();
-    volumenMotor.gain.value = 0;
-    filtroMotor.connect(volumenMotor);
-    volumenMotor.connect(contexto.destination);
+function prepararAudios() {
+  if (typeof Audio === "undefined") return false;
 
-    motor = contexto.createOscillator();
-    motor.type = "sawtooth";
-    motor.frequency.value = 55;
-    motor.connect(filtroMotor);
-    motor.start();
-
-    armonico = contexto.createOscillator();
-    armonico.type = "triangle";
-    armonico.frequency.value = 110;
-    const volumenArmonico = contexto.createGain();
-    volumenArmonico.gain.value = 0.28;
-    armonico.connect(volumenArmonico);
-    volumenArmonico.connect(filtroMotor);
-    armonico.start();
+  if (!motor) {
+    motor = new Audio(rutaAudio("motor"));
+    motor.loop = false;
+    motor.preload = "auto";
+    motor.volume = 0;
+    motor.addEventListener("ended", () => {
+      if (!motor || !habilitado || !motorEnMarcha) return;
+      motor.currentTime = INICIO_AUDIO_MOTOR_S;
+      void motor.play().catch(() => { motorEnMarcha = false; });
+    });
   }
 
-  await contexto.resume();
-  habilitado = contexto.state === "running";
-  return habilitado;
+  for (const efecto of ["escudo-activar", "escudo-desactivar", "explosion"] as const) {
+    if (!efectos.has(efecto)) {
+      const audio = new Audio(rutaAudio(efecto));
+      audio.preload = "auto";
+      audio.addEventListener("ended", () => efectosActivos.delete(audio));
+      efectos.set(efecto, audio);
+    }
+  }
+
+  return true;
+}
+
+/** Habilita el audio desde el clic explícito del usuario y prepara los clips locales. */
+export async function activarAudio() {
+  if (!prepararAudios() || !motor) return false;
+
+  let reproduccionMotor: Promise<void>;
+  try {
+    motor.volume = 0;
+    motor.currentTime = INICIO_AUDIO_MOTOR_S;
+    reproduccionMotor = motor.play();
+  } catch {
+    return false;
+  }
+
+  try {
+    if (typeof window.AudioContext !== "undefined") {
+      contexto ??= new window.AudioContext();
+      if (contexto.state !== "running") await contexto.resume();
+    }
+  } catch {
+    // La reproducción de archivos sigue funcionando aunque Web Audio no esté disponible.
+  }
+
+  try {
+    await reproduccionMotor;
+    habilitado = true;
+    return true;
+  } catch {
+    habilitado = false;
+    motor.pause();
+    return false;
+  }
 }
 
 export function silenciarAudio() {
   habilitado = false;
-  if (contexto && volumenMotor) {
-    volumenMotor.gain.setTargetAtTime(0, contexto.currentTime, 0.04);
+  motorEnMarcha = false;
+  if (motor) {
+    motor.volume = 0;
+    motor.pause();
   }
+  for (const audio of efectosActivos) {
+    audio.pause();
+    audio.currentTime = 0;
+  }
+  efectosActivos.clear();
 }
 
 export function actualizarMotor(velocidad: number, enMarcha: boolean) {
-  if (!contexto || !motor || !armonico || !filtroMotor || !volumenMotor) return;
-
-  const ahora = contexto.currentTime;
+  if (!motor) return;
   const vel = Math.max(0, Math.min(100, velocidad));
-  const volumen = habilitado && enMarcha ? 0.018 + (vel / 100) * 0.048 : 0;
-  motor.frequency.setTargetAtTime(48 + vel * 1.18, ahora, 0.09);
-  armonico.frequency.setTargetAtTime(96 + vel * 2.36, ahora, 0.09);
-  filtroMotor.frequency.setTargetAtTime(300 + vel * 11, ahora, 0.1);
-  volumenMotor.gain.setTargetAtTime(volumen, ahora, 0.12);
+  const debeSonar = habilitado && enMarcha;
+  if (debeSonar && !motorEnMarcha) {
+    motor.currentTime = INICIO_AUDIO_MOTOR_S;
+    void motor.play().catch(() => { motorEnMarcha = false; });
+  }
+  if (!debeSonar && motorEnMarcha) motor.pause();
+  motorEnMarcha = debeSonar;
+  motor.playbackRate = 0.82 + (vel / 100) * 0.55;
+  motor.volume = debeSonar ? 0.12 + (vel / 100) * 0.2 : 0;
+}
+
+function reproducirEfecto(nombre: Efecto, volumen: number) {
+  if (!habilitado) return;
+  const audio = efectos.get(nombre);
+  if (!audio) return;
+
+  audio.pause();
+  audio.currentTime = 0;
+  audio.volume = volumen;
+  efectosActivos.add(audio);
+  void audio.play().catch(() => efectosActivos.delete(audio));
+}
+
+export function sonarEscudo(activado: boolean) {
+  reproducirEfecto(activado ? "escudo-activar" : "escudo-desactivar", 0.78);
+}
+
+export function sonarDestruccion() {
+  reproducirEfecto("explosion", 0.88);
 }
 
 export function sonarChoque() {

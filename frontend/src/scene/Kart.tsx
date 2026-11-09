@@ -1,7 +1,7 @@
 import { useEffect, useLayoutEffect, useMemo, useRef } from "react";
 import { useFrame } from "@react-three/fiber";
 import { RoundedBox } from "@react-three/drei";
-import type { Group, MeshPhysicalMaterial, MeshStandardMaterial, SpotLight } from "three";
+import type { Group, MeshBasicMaterial, MeshPhysicalMaterial, MeshStandardMaterial, SpotLight } from "three";
 import * as THREE from "three";
 import { AVANCE, ESCALA, carrera, momento } from "../game/carrera";
 
@@ -23,26 +23,39 @@ function crearTexturaPintura() {
   let seed = 71829;
   for (let i = 0; i < imagen.data.length; i += 4) {
     seed = (seed * 1664525 + 1013904223) >>> 0;
-    imagen.data[i] = 14 + (seed & 7);
-    imagen.data[i + 1] = 185 + ((seed >>> 3) & 15);
-    imagen.data[i + 2] = 194 + ((seed >>> 7) & 15);
+    imagen.data[i] = 14 + (seed & 9);
+    imagen.data[i + 1] = 17 + ((seed >>> 3) & 10);
+    imagen.data[i + 2] = 23 + ((seed >>> 7) & 12);
     imagen.data[i + 3] = 255;
   }
   ctx.putImageData(imagen, 0, 0);
-  ctx.fillStyle = "#173952";
-  ctx.fillRect(0.198 * canvas.width, 0, 0.018 * canvas.width, canvas.height);
-  ctx.fillRect(0.284 * canvas.width, 0, 0.018 * canvas.width, canvas.height);
-  ctx.fillStyle = "#facc15";
-  ctx.fillRect(0.218 * canvas.width, 0, 0.018 * canvas.width, canvas.height);
-  ctx.fillRect(0.264 * canvas.width, 0, 0.018 * canvas.width, canvas.height);
+  ctx.fillStyle = "#aeb8c4";
+  ctx.fillRect(0.204 * canvas.width, 0, 0.014 * canvas.width, canvas.height);
+  ctx.fillRect(0.282 * canvas.width, 0, 0.014 * canvas.width, canvas.height);
   ctx.fillStyle = "#f8fafc";
-  ctx.fillRect(0.239 * canvas.width, 0, 0.022 * canvas.width, canvas.height);
-  ctx.fillStyle = "#263541";
+  ctx.fillRect(0.222 * canvas.width, 0, 0.009 * canvas.width, canvas.height);
+  ctx.fillRect(0.269 * canvas.width, 0, 0.009 * canvas.width, canvas.height);
+  ctx.fillStyle = "#dce2e9";
+  ctx.fillRect(0.245 * canvas.width, 0, 0.01 * canvas.width, canvas.height);
+  ctx.fillStyle = "#dc2638";
+  for (const centro of [0.235, 0.265]) {
+    const x = centro * canvas.width;
+    ctx.beginPath();
+    ctx.moveTo(x, 0.035 * canvas.height);
+    ctx.lineTo(x + 3, 0.13 * canvas.height);
+    ctx.lineTo(x + 3, 0.87 * canvas.height);
+    ctx.lineTo(x, 0.97 * canvas.height);
+    ctx.lineTo(x - 3, 0.87 * canvas.height);
+    ctx.lineTo(x - 3, 0.13 * canvas.height);
+    ctx.closePath();
+    ctx.fill();
+  }
+  ctx.fillStyle = "#080c12";
   ctx.fillRect(0.232 * canvas.width, 0.76 * canvas.height, 0.036 * canvas.width, 0.16 * canvas.height);
-  ctx.strokeStyle = "rgba(225,245,247,0.28)";
+  ctx.strokeStyle = "rgba(248,250,252,0.5)";
   ctx.lineWidth = 2;
   ctx.strokeRect(0.232 * canvas.width, 0.76 * canvas.height, 0.036 * canvas.width, 0.16 * canvas.height);
-  ctx.fillStyle = "#facc15";
+  ctx.fillStyle = "#f8fafc";
   ctx.font = "700 22px sans-serif";
   ctx.textAlign = "center";
   ctx.fillText("HR", 0.25 * canvas.width, 0.7 * canvas.height);
@@ -178,6 +191,11 @@ export function Kart() {
   const faros = useRef<MeshStandardMaterial[]>([]);
   const focos = useRef<SpotLight[]>([]);
   const destinos = useRef<Group[]>([]);
+  const escudo = useRef<Group>(null);
+  const llamas = useRef<Group>(null);
+  const escudoCasco = useRef<MeshPhysicalMaterial>(null);
+  const escudoLineas = useRef<MeshBasicMaterial>(null);
+  const escudoProgreso = useRef(0);
 
   useEffect(() => {
     focos.current.forEach((foco, i) => {
@@ -186,13 +204,14 @@ export function Kart() {
     });
   }, []);
 
-  useFrame(() => {
+  useFrame((_, dt) => {
     const g = grupo.current;
     if (!g) return;
+    const ahora = performance.now();
     g.position.x = carrera.kartX;
     g.rotation.z = carrera.inclinacion;
     g.rotation.y = 0;
-    pintura.current?.color.set(carrera.alert ? "#ff9c45" : "#ffffff");
+      pintura.current?.color.set(carrera.alert ? "#ff9c45" : "#ffffff");
     const noche = momento().noche;
     focos.current.forEach((foco) => { if (foco) foco.intensity = 280 * noche; });
     faros.current.forEach((lente) => {
@@ -200,6 +219,21 @@ export function Kart() {
       lente.emissiveIntensity = 0.4 + noche * 5;
       lente.color.set(noche > 0.08 ? "#fff8d8" : "#b8e9ef");
     });
+    if (llamas.current) {
+      const activas = carrera.llamasHasta > ahora && carrera.iniciada && !carrera.detenida && !carrera.escudoActivo;
+      llamas.current.visible = activas;
+      const pulso = 1 + Math.sin(ahora * 0.035) * 0.12;
+      llamas.current.scale.set(0.92 + pulso * 0.08, pulso, 0.9 + pulso * 0.1);
+    }
+    escudoProgreso.current = THREE.MathUtils.damp(escudoProgreso.current, carrera.escudoActivo ? 1 : 0, 14, dt);
+    const fuerza = escudoProgreso.current;
+    if (escudo.current) {
+      escudo.current.visible = fuerza > 0.015;
+      const pulso = 1 + Math.sin(performance.now() * 0.009) * 0.018 * fuerza;
+      escudo.current.scale.set(1.28 * pulso, 1.04 * pulso, 1.72 * pulso);
+    }
+    if (escudoCasco.current) escudoCasco.current.opacity = fuerza * 0.19;
+    if (escudoLineas.current) escudoLineas.current.opacity = fuerza * (0.36 + Math.sin(performance.now() * 0.012) * 0.1);
   });
 
   return (
@@ -208,7 +242,7 @@ export function Kart() {
       <mesh geometry={CARROCERIA} castShadow receiveShadow>
         <meshPhysicalMaterial
           ref={pintura}
-          color="#14c8d0"
+          color="#ffffff"
           map={TEXTURA_PINTURA}
           normalMap={NORMAL_PINTURA}
           normalScale={new THREE.Vector2(0.035, 0.035)}
@@ -221,7 +255,7 @@ export function Kart() {
       </mesh>
       {[-0.51, 0.51].map((x) => (
         <mesh key={x} position={[x, 0, 0.2]} geometry={PONTON} castShadow receiveShadow>
-          <meshPhysicalMaterial color="#087b91" roughness={0.32} metalness={0.24} clearcoat={0.82} clearcoatRoughness={0.23} />
+          <meshPhysicalMaterial color="#dce2e9" roughness={0.3} metalness={0.18} clearcoat={0.86} clearcoatRoughness={0.2} />
         </mesh>
       ))}
       {[-0.12, 0, 0.12].map((x, i) => (
@@ -238,7 +272,7 @@ export function Kart() {
           </mesh>
           <mesh position={[lado * 0.67, 0.43, 0.36]} rotation={[Math.PI / 2, 0, 0]} scale={[0.65, 0.65, 0.65]}>
             <capsuleGeometry args={[0.025, 0.19, 5, 10]} />
-            <meshBasicMaterial color="#1dcbd0" />
+            <meshBasicMaterial color="#e2e8f0" />
           </mesh>
         </group>
       ))}
@@ -246,21 +280,38 @@ export function Kart() {
       {/* Cockpit envolvente y casco. */}
       <mesh position={[0, 0.63, 0.18]} scale={[0.35, 0.22, 0.48]} castShadow>
         <sphereGeometry args={[1, 32, 24]} />
-        <meshPhysicalMaterial color="#061b35" roughness={0.13} metalness={0.34} clearcoat={1} />
+        <meshPhysicalMaterial color="#080c12" roughness={0.2} metalness={0.42} clearcoat={1} clearcoatRoughness={0.12} />
       </mesh>
       <mesh position={[0, 0.86, 0.23]} scale={[0.19, 0.2, 0.2]} castShadow>
         <sphereGeometry args={[1, 28, 20]} />
-        <meshPhysicalMaterial color="#1646b8" roughness={0.22} clearcoat={0.9} />
+        <meshPhysicalMaterial color="#f1f5f9" roughness={0.24} metalness={0.08} clearcoat={0.96} clearcoatRoughness={0.12} />
       </mesh>
-      <mesh position={[0, 0.91, 0.25]} rotation={[0, 0, Math.PI / 2]}>
-        <torusGeometry args={[0.17, 0.025, 12, 32]} />
-        <meshStandardMaterial color="#facc15" metalness={0.55} roughness={0.3} />
+      {/* Casco integral: visor ahumado, banda posterior y cresta aerodinámica. */}
+      <mesh position={[0, 0.875, 0.025]} scale={[0.166, 0.072, 0.035]}>
+        <sphereGeometry args={[1, 28, 18]} />
+        <meshPhysicalMaterial color="#080c12" roughness={0.12} metalness={0.48} clearcoat={1} clearcoatRoughness={0.08} />
+      </mesh>
+      <RoundedBox args={[0.12, 0.07, 0.018]} radius={0.018} smoothness={4} position={[0, 0.86, 0.425]}>
+        <meshPhysicalMaterial color="#111820" roughness={0.24} metalness={0.42} clearcoat={0.9} />
+      </RoundedBox>
+      <mesh position={[0, 1.045, 0.23]} rotation={[Math.PI / 2, 0, 0]}>
+        <capsuleGeometry args={[0.018, 0.13, 5, 10]} />
+        <meshStandardMaterial color="#111820" metalness={0.35} roughness={0.24} />
+      </mesh>
+      <mesh position={[0, 0.735, 0.23]} rotation={[Math.PI / 2, 0, 0]}>
+        <torusGeometry args={[0.145, 0.018, 10, 32]} />
+        <meshStandardMaterial color="#111820" metalness={0.45} roughness={0.3} />
       </mesh>
 
       {/* Ala trasera con cantos redondeados y soportes inclinados. */}
       <RoundedBox args={[1.58, 0.1, 0.3]} radius={0.045} smoothness={4} position={[0, 1.02, 0.98]} castShadow>
-        <meshPhysicalMaterial color="#087d96" roughness={0.24} metalness={0.25} clearcoat={0.85} />
+        <meshPhysicalMaterial color="#10151d" roughness={0.25} metalness={0.38} clearcoat={0.88} />
       </RoundedBox>
+      {[-0.055, 0.055].map((z) => (
+        <RoundedBox key={z} args={[1.38, 0.012, 0.024]} radius={0.006} smoothness={3} position={[0, 1.074, 0.98 + z]}>
+          <meshPhysicalMaterial color="#dc2638" roughness={0.28} metalness={0.16} clearcoat={0.8} />
+        </RoundedBox>
+      ))}
       {[-0.58, 0.58].map((x) => (
         <mesh key={x} position={[x, 0.82, 0.91]} rotation={[0.12, 0, x < 0 ? -0.12 : 0.12]} castShadow>
           <capsuleGeometry args={[0.035, 0.34, 6, 12]} />
@@ -295,7 +346,7 @@ export function Kart() {
       ))}
 
       <RoundedBox args={[1.02, 0.13, 0.07]} radius={0.052} smoothness={5} position={[0, 0.46, 1.31]}>
-        <meshStandardMaterial color="#07505e" metalness={0.58} roughness={0.3} />
+        <meshStandardMaterial color="#10151d" metalness={0.58} roughness={0.3} />
       </RoundedBox>
       {[-0.38, 0.38].map((x) => (
         <RoundedBox key={x} args={[0.24, 0.072, 0.045]} radius={0.032} smoothness={5} position={[x, 0.49, 1.355]}>
@@ -308,6 +359,61 @@ export function Kart() {
           <meshBasicMaterial color="#38bdf8" transparent opacity={0.72} />
         </mesh>
       ))}
+      <group ref={llamas} visible={false}>
+        {[-0.16, 0.16].map((x) => (
+          <group key={`llama-${x}`} position={[x, 0.3, 1.34]}>
+            <mesh rotation={[Math.PI / 2, 0, 0]}>
+              <coneGeometry args={[0.12, 0.76, 20]} />
+              <meshBasicMaterial
+                color="#ff4d16"
+                transparent
+                opacity={0.88}
+                toneMapped={false}
+                blending={THREE.AdditiveBlending}
+                depthWrite={false}
+                side={THREE.DoubleSide}
+              />
+            </mesh>
+            <mesh position={[0, 0, 0.035]} rotation={[Math.PI / 2, 0, 0]}>
+              <coneGeometry args={[0.068, 0.52, 18]} />
+              <meshBasicMaterial
+                color="#ffd166"
+                transparent
+                opacity={0.94}
+                toneMapped={false}
+                blending={THREE.AdditiveBlending}
+                depthWrite={false}
+                side={THREE.DoubleSide}
+              />
+            </mesh>
+            <mesh position={[0, 0, -0.025]}>
+              <torusGeometry args={[0.065, 0.012, 8, 20]} />
+              <meshBasicMaterial color="#ff8a24" toneMapped={false} />
+            </mesh>
+          </group>
+        ))}
+      </group>
+      <group ref={escudo} position={[0, 0.52, 0]} visible={false}>
+        <mesh>
+          <sphereGeometry args={[1, 32, 24]} />
+          <meshPhysicalMaterial
+            ref={escudoCasco}
+            color="#5deeff"
+            emissive="#13dff5"
+            emissiveIntensity={0.8}
+            transparent
+            opacity={0}
+            roughness={0.18}
+            metalness={0.12}
+            depthWrite={false}
+            side={THREE.DoubleSide}
+          />
+        </mesh>
+        <mesh scale={[1.008, 1.008, 1.008]}>
+          <icosahedronGeometry args={[1, 2]} />
+          <meshBasicMaterial ref={escudoLineas} color="#a6fbff" wireframe transparent opacity={0} depthWrite={false} />
+        </mesh>
+      </group>
     </group>
   );
 }
@@ -333,7 +439,7 @@ function Rueda({ x, z, escala }: { x: number; z: number; escala: number }) {
   }, [escala, matriz]);
   useFrame((_, dt) => {
     if (!giro.current) return;
-    const velocidad = Math.max(0, carrera.carSpeed) / 100 * AVANCE * ESCALA;
+    const velocidad = carrera.detenida ? 0 : Math.max(0, carrera.carSpeed) / 100 * AVANCE * ESCALA;
     giro.current.rotation.y += (velocidad / (0.34 * escala)) * dt;
   });
   return (

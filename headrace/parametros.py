@@ -1,7 +1,9 @@
-"""Punto de partida del simulador. No es la sintonía final del ESP32."""
+"""Ganancias iniciales, compartidas por la simulación y firmware MicroPython."""
+
+import os
 
 KP = 0.35
-KI = 0.0
+KI = 0.01
 KD = 0.02
 
 DT_NOMINAL = 0.05
@@ -26,4 +28,4 @@ AVANCE_MAX_UNIDADES_S = 200
 ESPERA_VUELTA_S = 2.0
 
 HOST = "127.0.0.1"
-PUERTO = 5000
+PUERTO = int(os.getenv("HEADRACE_PORT", "5000"))

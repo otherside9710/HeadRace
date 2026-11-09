@@ -1,6 +1,8 @@
 import { defineConfig } from "vite";
 import react from "@vitejs/plugin-react";
 
+const backend = `http://127.0.0.1:${process.env.HEADRACE_PORT ?? "5000"}`;
+
 export default defineConfig({
   plugins: [react()],
   build: {
@@ -9,10 +11,10 @@ export default defineConfig({
   },
   server: {
     proxy: {
-      "/socket.io": { target: "http://127.0.0.1:5000", ws: true },
-      "/historial": "http://127.0.0.1:5000",
-      "/sesiones": "http://127.0.0.1:5000",
-      "/mejores-carreras": "http://127.0.0.1:5000",
+      "/socket.io": { target: backend, ws: true },
+      "/historial": backend,
+      "/sesiones": backend,
+      "/mejores-carreras": backend,
     },
   },
 });
